@@ -1,0 +1,20 @@
+{
+  "model_name": "XGBoost_default",
+  "experiment": "BEAM_Experiment_1_Baselines",
+  "mlflow_run_id": "b2b29e603ec24493bf0f5536367bd74b",
+  "test_r2": 0.9952,
+  "features": [
+    "Relative_Compactness",
+    "Surface_Area",
+    "Wall_Area",
+    "Roof_Area",
+    "Overall_Height",
+    "Orientation",
+    "Glazing_Area",
+    "Glazing_Area_Distribution"
+  ],
+  "targets": [
+    "Heating_Load",
+    "Cooling_Load"
+  ]
+}
