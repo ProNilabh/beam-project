@@ -1,8 +1,0 @@
-experiment,model,run_id,test_r2,test_rmse,test_mae,heating_r2,cooling_r2
-BEAM_Experiment_1_Baselines,XGBoost_default,eb9957a412ba43e4b8aee6879dd15e14,0.9952,0.6718,0.3561,0.9984,0.992
-BEAM_Experiment_2_Tuned,Gradient_Boosting_tuned,2f1ab618a8d1499d9b0f8ce263b89c63,0.995,0.6904,0.3928,0.9982,0.9917
-BEAM_Experiment_2_Tuned,XGBoost_tuned,bef9d58a98cb446ea4ddf426e9f5b5cb,0.9947,0.7065,0.3744,0.9984,0.991
-BEAM_Experiment_2_Tuned,Neural_Network_MLP,30111ca6960045e3a052327bfb1c394d,0.9848,1.2045,0.8231,0.9925,0.9772
-BEAM_Experiment_1_Baselines,Random_Forest_default,973d6bb36a394247b77933689f13f002,0.9827,1.2699,0.7154,0.9976,0.9679
-BEAM_Experiment_2_Tuned,Random_Forest_tuned,e407abf87c2e4c40ad61c1f1c6b26ef7,0.9807,1.3422,0.7493,0.9976,0.9638
-BEAM_Experiment_1_Baselines,Ridge_Regression,10e5f669d1b9445e987ae712caba5de6,0.9022,3.0944,2.1933,0.9116,0.8928
