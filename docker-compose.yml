@@ -1,20 +1,109 @@
 version: "3.8"
 
 services:
+
+  # ── Step 1: Train the model (runs once, then exits) ────────────────────
+  beam-train:
+    build: .
+    container_name: beam-train
+    command: python -m src.prefect_train
+    volumes:
+      - model-data:/app/models
+      - mlflow-data:/app/mlruns
+      - ./data:/app/data
+
+  # ── Step 2: FastAPI web service (waits for training) ───────────────────
   beam-api:
     build: .
     container_name: beam-api
     ports:
       - "8000:8000"
-    volumes:
-      - ./models:/app/models
     command: uvicorn src.app:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - model-data:/app/models
+    depends_on:
+      beam-train:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
-  mlflow-ui:
+  # ── Step 3: MLflow UI ──────────────────────────────────────────────────
+  beam-mlflow:
     build: .
     container_name: beam-mlflow
     ports:
       - "5000:5000"
-    volumes:
-      - ./mlruns:/app/mlruns
     command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri file:///app/mlruns
+    volumes:
+      - mlflow-data:/app/mlruns
+    depends_on:
+      beam-train:
+        condition: service_completed_successfully
+
+  # ── Step 4: Postgres database for monitoring ───────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: beam-postgres
+    environment:
+      POSTGRES_DB: beam_monitoring
+      POSTGRES_USER: beam_user
+      POSTGRES_PASSWORD: beam_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./monitoring/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beam_user -d beam_monitoring"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Step 5: Adminer (database web UI) ──────────────────────────────────
+  adminer:
+    image: adminer:latest
+    container_name: beam-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Step 6: Run monitoring pipeline (after train + postgres) ───────────
+  beam-monitor:
+    build: .
+    container_name: beam-monitor
+    command: python -m monitoring.monitor
+    environment:
+      POSTGRES_URI: postgresql://beam_user:beam_pass@postgres:5432/beam_monitoring
+    volumes:
+      - model-data:/app/models
+      - ./data:/app/data
+    depends_on:
+      beam-train:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  # ── Step 7: Grafana dashboard ──────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: beam-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: beam
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  model-data:
+  mlflow-data:
+  postgres-data:
+  grafana-data:

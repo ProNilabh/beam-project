@@ -1,9 +1,15 @@
+"""
+BEAM — Data Preprocessing Module
+Loads the UCI Energy Efficiency dataset and prepares it for training.
+"""
+
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import os
 
+# Human-readable feature names mapped from X1–X8
 FEATURE_NAMES = [
     "Relative_Compactness",       # X1
     "Surface_Area",               # X2
@@ -19,6 +25,7 @@ TARGET_NAMES = ["Heating_Load", "Cooling_Load"]  # Y1, Y2
 
 
 def load_data(filepath: str = None) -> pd.DataFrame:
+    """Load the ENB2012 dataset and rename columns."""
     if filepath is None:
         filepath = os.path.join(os.path.dirname(__file__), "..", "data", "ENB2012_data.csv")
 
@@ -38,6 +45,10 @@ def prepare_data(
     random_state: int = 42,
     scale: bool = True,
 ):
+    """
+    Split into train/test and optionally scale features.
+    Returns: X_train, X_test, y_train, y_test, scaler (or None)
+    """
     X = df[FEATURE_NAMES].values
     y = df[TARGET_NAMES].values
 

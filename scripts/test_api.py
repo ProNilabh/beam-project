@@ -1,15 +1,26 @@
+"""
+BEAM — API Test Script
+======================
+Run this AFTER starting the FastAPI server to verify everything works.
+
+Usage:
+    # Terminal 1: uvicorn src.app:app --reload
+    # Terminal 2: python scripts/test_api.py
+"""
+
 import httpx
 import json
 import sys
 
 BASE_URL = "http://localhost:8000"
 
+
 def test_health():
     print("1. Testing GET / (health check) ...")
     r = httpx.get(f"{BASE_URL}/")
     assert r.status_code == 200
     data = r.json()
-    print(f"    Status: {data['status']} | Model: {data['model']}")
+    print(f"   ✅ Status: {data['status']} | Model: {data['model']}")
     return True
 
 
@@ -18,7 +29,7 @@ def test_model_info():
     r = httpx.get(f"{BASE_URL}/model-info")
     assert r.status_code == 200
     data = r.json()
-    print(f"    Model: {data['model_name']} | R²: {data['test_r2']}")
+    print(f"   ✅ Model: {data['model_name']} | R²: {data['test_r2']}")
     return True
 
 
@@ -37,8 +48,8 @@ def test_single_predict():
     r = httpx.post(f"{BASE_URL}/predict", json=payload)
     assert r.status_code == 200
     data = r.json()
-    print(f"    Heating: {data['Heating_Load_kWh_m2']} kWh/m²")
-    print(f"    Cooling: {data['Cooling_Load_kWh_m2']} kWh/m²")
+    print(f"   ✅ Heating: {data['Heating_Load_kWh_m2']} kWh/m²")
+    print(f"   ✅ Cooling: {data['Cooling_Load_kWh_m2']} kWh/m²")
     return True
 
 
@@ -71,7 +82,7 @@ def test_batch_predict():
     r = httpx.post(f"{BASE_URL}/predict/batch", json=payload)
     assert r.status_code == 200
     data = r.json()
-    print(f"    Returned {data['count']} predictions")
+    print(f"   ✅ Returned {data['count']} predictions")
     for i, p in enumerate(data["predictions"]):
         print(f"      Building {i+1}: Heating={p['Heating_Load_kWh_m2']}, Cooling={p['Cooling_Load_kWh_m2']}")
     return True
@@ -81,7 +92,7 @@ def test_swagger():
     print("5. Testing GET /docs (Swagger UI) ...")
     r = httpx.get(f"{BASE_URL}/docs")
     assert r.status_code == 200
-    print("    Swagger UI is accessible at http://localhost:8000/docs")
+    print("   ✅ Swagger UI is accessible at http://localhost:8000/docs")
     return True
 
 
@@ -99,11 +110,11 @@ if __name__ == "__main__":
             test()
             passed += 1
         except httpx.ConnectError:
-            print("    Connection refused — is the server running?")
+            print("   ❌ Connection refused — is the server running?")
             print("      Start it with: uvicorn src.app:app --reload")
             sys.exit(1)
         except AssertionError as e:
-            print(f"    FAILED: {e}")
+            print(f"   ❌ FAILED: {e}")
         print()
 
     print("=" * 60)

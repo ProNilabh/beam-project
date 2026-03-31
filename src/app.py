@@ -1,3 +1,13 @@
+"""
+BEAM — FastAPI Web Service
+==========================
+Deploys the best BEAM model as a REST API.
+
+Usage:
+    cd beam-project
+    uvicorn src.app:app --host 0.0.0.0 --port 8000 --reload
+"""
+
 import os
 import json
 import numpy as np
@@ -6,6 +16,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+# ─── Load model + scaler ────────────────────────────────────────────────────
+
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
 
 model  = joblib.load(os.path.join(MODEL_DIR, "best_model.joblib"))
@@ -13,6 +25,8 @@ scaler = joblib.load(os.path.join(MODEL_DIR, "scaler.joblib"))
 
 with open(os.path.join(MODEL_DIR, "metadata.json")) as f:
     metadata = json.load(f)
+
+# ─── FastAPI app ─────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="BEAM — Building Energy Assessment with ML",
@@ -30,7 +44,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── Schemas ─────────────────────────────────────────────────────────────────
+
 class BuildingInput(BaseModel):
+    """The 8 architectural design inputs."""
     Relative_Compactness: float = Field(
         ..., ge=0.6, le=1.0,
         description="Compactness ratio (0.62–0.98)",
@@ -81,6 +98,7 @@ class BuildingInput(BaseModel):
         }
     }
 
+
 class PredictionResponse(BaseModel):
     Heating_Load_kWh_m2: float
     Cooling_Load_kWh_m2: float
@@ -90,12 +108,17 @@ class PredictionResponse(BaseModel):
 class BatchInput(BaseModel):
     buildings: list[BuildingInput]
 
+
 class BatchResponse(BaseModel):
     predictions: list[PredictionResponse]
     count: int
 
+
+# ─── Endpoints ───────────────────────────────────────────────────────────────
+
 @app.get("/")
 def health():
+    """Health-check / root."""
     return {
         "status": "healthy",
         "model": metadata["model_name"],
@@ -103,12 +126,16 @@ def health():
         "version": "1.0.0",
     }
 
+
 @app.get("/model-info")
 def model_info():
+    """Return full model metadata."""
     return metadata
+
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(building: BuildingInput):
+    """Predict heating & cooling loads for ONE building."""
     try:
         features = np.array([[
             building.Relative_Compactness,
@@ -138,6 +165,7 @@ def predict(building: BuildingInput):
 
 @app.post("/predict/batch", response_model=BatchResponse)
 def predict_batch(batch: BatchInput):
+    """Predict for multiple buildings."""
     try:
         features = np.array([
             [
@@ -164,6 +192,9 @@ def predict_batch(batch: BatchInput):
         return BatchResponse(predictions=results, count=len(results))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── run directly ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn

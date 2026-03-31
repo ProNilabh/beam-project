@@ -1,0 +1,151 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Overall R² Score Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "" },
+      "targets": [
+        {
+          "rawSql": "SELECT timestamp AS time, r2 FROM model_metrics ORDER BY timestamp",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "custom": { "fillOpacity": 10, "lineWidth": 2 },
+          "min": 0, "max": 1,
+          "displayName": "R²",
+          "unit": "none"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "RMSE Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "" },
+      "targets": [
+        {
+          "rawSql": "SELECT timestamp AS time, rmse FROM model_metrics ORDER BY timestamp",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "custom": { "fillOpacity": 10, "lineWidth": 2 },
+          "displayName": "RMSE",
+          "unit": "none"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Heating vs Cooling R²",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "" },
+      "targets": [
+        {
+          "rawSql": "SELECT timestamp AS time, heating_r2 AS \"Heating R²\", cooling_r2 AS \"Cooling R²\" FROM model_metrics ORDER BY timestamp",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "fillOpacity": 5, "lineWidth": 2 },
+          "min": 0, "max": 1
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Drift Level vs RMSE",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "" },
+      "targets": [
+        {
+          "rawSql": "SELECT timestamp AS time, drift_level AS \"Drift Level\", rmse AS \"RMSE\" FROM model_metrics ORDER BY timestamp",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "fillOpacity": 10, "lineWidth": 2 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Batch Metrics Table",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "postgres", "uid": "" },
+      "targets": [
+        {
+          "rawSql": "SELECT batch_id, timestamp, model_name, n_samples, ROUND(r2::numeric, 4) as r2, ROUND(rmse::numeric, 4) as rmse, ROUND(mae::numeric, 4) as mae, ROUND(heating_r2::numeric, 4) as heating_r2, ROUND(cooling_r2::numeric, 4) as cooling_r2, drift_level FROM model_metrics ORDER BY batch_id",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Prediction Error Distribution (Latest Batch)",
+      "type": "histogram",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "postgres", "uid": "" },
+      "targets": [
+        {
+          "rawSql": "SELECT heating_error AS \"Heating Error\", cooling_error AS \"Cooling Error\" FROM prediction_log WHERE batch_id = (SELECT MAX(batch_id) FROM prediction_log)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "options": { "bucketCount": 20 }
+    },
+    {
+      "title": "Mean Absolute Error Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "postgres", "uid": "" },
+      "targets": [
+        {
+          "rawSql": "SELECT timestamp AS time, mae AS \"MAE\" FROM model_metrics ORDER BY timestamp",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "orange" },
+          "custom": { "fillOpacity": 10, "lineWidth": 2 },
+          "displayName": "MAE"
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["beam", "monitoring", "mlops"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "BEAM — Model Monitoring Dashboard",
+  "uid": "beam-monitoring",
+  "version": 1
+}

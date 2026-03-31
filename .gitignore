@@ -1,5 +1,3 @@
-.ipynb_checkpoints/
-data/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -12,9 +10,14 @@ env/
 .DS_Store
 Thumbs.db
 .ipynb_checkpoints/
+data/
 
-# MLflow local store (large — keep out of git)
+# MLflow local store
 mlruns/
 
-# Trained model binaries (large)
+# Trained model binaries
 models/*.joblib
+
+# Docker volumes
+postgres-data/
+grafana-data/
