@@ -2,7 +2,6 @@ version: "3.8"
 
 services:
 
-  # ── Step 1: Train the model (runs once, then exits) ────────────────────
   beam-train:
     build: .
     container_name: beam-train
@@ -12,7 +11,6 @@ services:
       - mlflow-data:/app/mlruns
       - ./data:/app/data
 
-  # ── Step 2: FastAPI web service (waits for training) ───────────────────
   beam-api:
     build: .
     container_name: beam-api
@@ -26,7 +24,6 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  # ── Step 3: MLflow UI ──────────────────────────────────────────────────
   beam-mlflow:
     build: .
     container_name: beam-mlflow
@@ -39,7 +36,6 @@ services:
       beam-train:
         condition: service_completed_successfully
 
-  # ── Step 4: Postgres database for monitoring ───────────────────────────
   postgres:
     image: postgres:15
     container_name: beam-postgres
@@ -58,7 +54,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Step 5: Adminer (database web UI) ──────────────────────────────────
   adminer:
     image: adminer:latest
     container_name: beam-adminer
@@ -68,7 +63,6 @@ services:
       postgres:
         condition: service_healthy
 
-  # ── Step 6: Run monitoring pipeline (after train + postgres) ───────────
   beam-monitor:
     build: .
     container_name: beam-monitor
@@ -84,7 +78,6 @@ services:
       postgres:
         condition: service_healthy
 
-  # ── Step 7: Grafana dashboard ──────────────────────────────────────────
   grafana:
     image: grafana/grafana:latest
     container_name: beam-grafana
