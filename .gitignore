@@ -1,23 +1,62 @@
+# ---------- Python ----------
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
-.venv/
+.installed.cfg
+*.egg
+
+# ---------- Virtual envs ----------
 venv/
 env/
-.idea/
+ENV/
+.venv/
+nlp_env/
+
+# ---------- IDE ----------
 .vscode/
+.idea/
 *.swp
+*.swo
 .DS_Store
-Thumbs.db
+
+# ---------- Jupyter ----------
 .ipynb_checkpoints/
-data/
+*.ipynb
 
-# MLflow local store
+# ---------- ML / data artifacts ----------
 mlruns/
-
-# Trained model binaries
+mlflow.db
+models/*.pkl
 models/*.joblib
+*.h5
+*.pt
 
-# Docker volumes
+# Keep raw data only if small; comment out the line below if you DO want
+# the dataset committed (it's tiny for ENB2012, ~70KB).
+# data/
+
+# ---------- Logs ----------
+*.log
+logs/
+
+# ---------- OS ----------
+Thumbs.db
+
+# ---------- Docker volumes (when running locally without Docker) ----------
 postgres-data/
 grafana-data/

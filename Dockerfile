@@ -1,29 +1,23 @@
-# ── BEAM — Building Energy Assessment with ML ───────────────────────────────
-# Single Dockerfile for the entire pipeline:
-#   - Training (python -m src.prefect_train)
-#   - API serving (uvicorn src.app:app)
-#   - Monitoring (python -m monitoring.monitor)
-#
-# The CMD is overridden per service in docker-compose.yml
-
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# System dependencies
+# System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Python dependencies (cached layer — only rebuilds if requirements change)
+# Python deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy entire project
-COPY . .
+# Source
+COPY src/ /app/src/
+COPY monitoring/ /app/monitoring/
 
-# Expose ports: 8000=FastAPI, 5000=MLflow
-EXPOSE 8000 5000
+# Create artifact dirs (mounted as volumes at runtime)
+RUN mkdir -p /app/models /app/mlruns /app/data
 
-# Default: run the FastAPI web service
-CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default — overridden by docker-compose `command:`
+CMD ["python", "-m", "src.prefect_train"]

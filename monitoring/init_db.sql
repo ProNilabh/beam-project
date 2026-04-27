@@ -1,38 +1,33 @@
--- BEAM Monitoring Database Initialization
--- Creates tables for model metrics and prediction logs
+-- BEAM Monitoring Database Schema
+-- Initialized automatically by Postgres Docker container on first run.
 
 CREATE TABLE IF NOT EXISTS model_metrics (
-    id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMP NOT NULL,
-    batch_id INTEGER NOT NULL,
-    model_name VARCHAR(100),
-    n_samples INTEGER,
-    r2 FLOAT,
-    rmse FLOAT,
-    mae FLOAT,
-    heating_r2 FLOAT,
-    heating_rmse FLOAT,
-    cooling_r2 FLOAT,
-    cooling_rmse FLOAT,
-    drift_level FLOAT DEFAULT 0.0
+    id              SERIAL PRIMARY KEY,
+    batch_id        INTEGER NOT NULL,
+    timestamp       TIMESTAMP NOT NULL,
+    model_name      TEXT NOT NULL,
+    n_samples       INTEGER NOT NULL,
+    r2              DOUBLE PRECISION,
+    rmse            DOUBLE PRECISION,
+    mae             DOUBLE PRECISION,
+    heating_r2      DOUBLE PRECISION,
+    cooling_r2      DOUBLE PRECISION,
+    drift_level     DOUBLE PRECISION,   -- simulated drift parameter (0..1)
+    drift_score     DOUBLE PRECISION    -- measured drift via KS statistic
 );
 
 CREATE TABLE IF NOT EXISTS prediction_log (
-    id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMP NOT NULL,
-    batch_id INTEGER NOT NULL,
-    relative_compactness FLOAT,
-    surface_area FLOAT,
-    wall_area FLOAT,
-    roof_area FLOAT,
-    overall_height FLOAT,
-    orientation FLOAT,
-    glazing_area FLOAT,
-    glazing_area_distribution FLOAT,
-    actual_heating FLOAT,
-    actual_cooling FLOAT,
-    predicted_heating FLOAT,
-    predicted_cooling FLOAT,
-    heating_error FLOAT,
-    cooling_error FLOAT
+    id                  SERIAL PRIMARY KEY,
+    batch_id            INTEGER NOT NULL,
+    timestamp           TIMESTAMP NOT NULL,
+    actual_heating      DOUBLE PRECISION,
+    predicted_heating   DOUBLE PRECISION,
+    heating_error       DOUBLE PRECISION,
+    actual_cooling      DOUBLE PRECISION,
+    predicted_cooling   DOUBLE PRECISION,
+    cooling_error       DOUBLE PRECISION
 );
+
+CREATE INDEX IF NOT EXISTS idx_metrics_timestamp  ON model_metrics(timestamp);
+CREATE INDEX IF NOT EXISTS idx_metrics_batch      ON model_metrics(batch_id);
+CREATE INDEX IF NOT EXISTS idx_predictions_batch  ON prediction_log(batch_id);

@@ -1,151 +1,327 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 1,
+  "graphTooltip": 0,
   "id": null,
   "links": [],
+  "liveNow": false,
   "panels": [
     {
-      "title": "Overall R² Score Over Time",
-      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "beam-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "R²",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "green", "value": 0.8 }
+            ]
+          }
+        },
+        "overrides": []
+      },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "" },
+      "id": 1,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
       "targets": [
         {
-          "rawSql": "SELECT timestamp AS time, r2 FROM model_metrics ORDER BY timestamp",
+          "datasource": { "type": "postgres", "uid": "beam-postgres" },
           "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, r2 AS \"R²\" FROM model_metrics ORDER BY timestamp",
           "refId": "A"
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "green" },
-          "custom": { "fillOpacity": 10, "lineWidth": 2 },
-          "min": 0, "max": 1,
-          "displayName": "R²",
-          "unit": "none"
-        },
-        "overrides": []
-      }
+      "title": "Overall R² Score Over Time",
+      "type": "timeseries"
     },
     {
-      "title": "RMSE Over Time",
-      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "beam-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "RMSE",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "mappings": []
+        }
+      },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "" },
+      "id": 2,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
       "targets": [
         {
-          "rawSql": "SELECT timestamp AS time, rmse FROM model_metrics ORDER BY timestamp",
+          "datasource": { "type": "postgres", "uid": "beam-postgres" },
           "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, rmse AS \"RMSE\" FROM model_metrics ORDER BY timestamp",
           "refId": "A"
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "red" },
-          "custom": { "fillOpacity": 10, "lineWidth": 2 },
-          "displayName": "RMSE",
-          "unit": "none"
-        },
-        "overrides": []
-      }
+      "title": "RMSE Over Time",
+      "type": "timeseries"
     },
     {
-      "title": "Heating vs Cooling R²",
-      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "beam-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 6,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "always",
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.15 },
+              { "color": "red", "value": 0.20 }
+            ]
+          }
+        }
+      },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "postgres", "uid": "" },
+      "id": 3,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
       "targets": [
         {
-          "rawSql": "SELECT timestamp AS time, heating_r2 AS \"Heating R²\", cooling_r2 AS \"Cooling R²\" FROM model_metrics ORDER BY timestamp",
+          "datasource": { "type": "postgres", "uid": "beam-postgres" },
           "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, drift_score AS \"Drift Score (KS)\", drift_level AS \"Injected Drift\" FROM model_metrics ORDER BY timestamp",
           "refId": "A"
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": { "fillOpacity": 5, "lineWidth": 2 },
-          "min": 0, "max": 1
-        },
-        "overrides": []
-      }
+      "title": "Data Drift — Measured vs Injected",
+      "type": "timeseries"
     },
     {
-      "title": "Drift Level vs RMSE",
-      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "beam-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "R²",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "max": 1,
+          "min": 0,
+          "mappings": []
+        }
+      },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "postgres", "uid": "" },
+      "id": 4,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
       "targets": [
         {
+          "datasource": { "type": "postgres", "uid": "beam-postgres" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, heating_r2 AS \"Heating R²\", cooling_r2 AS \"Cooling R²\" FROM model_metrics ORDER BY timestamp",
+          "refId": "A"
+        }
+      ],
+      "title": "Heating vs Cooling R²",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "beam-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "stacking": { "group": "A", "mode": "none" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 5,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "beam-postgres" },
+          "format": "time_series",
+          "rawQuery": true,
           "rawSql": "SELECT timestamp AS time, drift_level AS \"Drift Level\", rmse AS \"RMSE\" FROM model_metrics ORDER BY timestamp",
-          "format": "time_series",
           "refId": "A"
         }
       ],
+      "title": "Drift Level vs RMSE",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "beam-postgres" },
       "fieldConfig": {
         "defaults": {
-          "custom": { "fillOpacity": 10, "lineWidth": 2 }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "title": "Batch Metrics Table",
-      "type": "table",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
-      "datasource": { "type": "postgres", "uid": "" },
+          "custom": { "align": "auto", "displayMode": "auto", "inspect": false }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 6,
+      "options": {
+        "footer": { "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true
+      },
       "targets": [
         {
-          "rawSql": "SELECT batch_id, timestamp, model_name, n_samples, ROUND(r2::numeric, 4) as r2, ROUND(rmse::numeric, 4) as rmse, ROUND(mae::numeric, 4) as mae, ROUND(heating_r2::numeric, 4) as heating_r2, ROUND(cooling_r2::numeric, 4) as cooling_r2, drift_level FROM model_metrics ORDER BY batch_id",
+          "datasource": { "type": "postgres", "uid": "beam-postgres" },
           "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT batch_id AS \"Batch\", ROUND(r2::numeric, 4) AS \"R²\", ROUND(rmse::numeric, 4) AS \"RMSE\", ROUND(mae::numeric, 4) AS \"MAE\", ROUND(drift_level::numeric, 3) AS \"Drift Lvl\", ROUND(drift_score::numeric, 3) AS \"Drift Score\" FROM model_metrics ORDER BY batch_id",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Batch Metrics",
+      "type": "table"
     },
     {
-      "title": "Prediction Error Distribution (Latest Batch)",
-      "type": "histogram",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-      "datasource": { "type": "postgres", "uid": "" },
+      "datasource": { "type": "postgres", "uid": "beam-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Error",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1,
+            "scaleDistribution": { "type": "linear" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "id": 7,
+      "options": {
+        "bucketOffset": 0,
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }
+      },
       "targets": [
         {
+          "datasource": { "type": "postgres", "uid": "beam-postgres" },
+          "format": "table",
+          "rawQuery": true,
           "rawSql": "SELECT heating_error AS \"Heating Error\", cooling_error AS \"Cooling Error\" FROM prediction_log WHERE batch_id = (SELECT MAX(batch_id) FROM prediction_log)",
-          "format": "table",
           "refId": "A"
         }
       ],
-      "options": { "bucketCount": 20 }
-    },
-    {
-      "title": "Mean Absolute Error Over Time",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-      "datasource": { "type": "postgres", "uid": "" },
-      "targets": [
-        {
-          "rawSql": "SELECT timestamp AS time, mae AS \"MAE\" FROM model_metrics ORDER BY timestamp",
-          "format": "time_series",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "orange" },
-          "custom": { "fillOpacity": 10, "lineWidth": 2 },
-          "displayName": "MAE"
-        },
-        "overrides": []
-      }
+      "title": "Prediction Error Distribution (Latest Batch)",
+      "type": "histogram"
     }
   ],
-  "schemaVersion": 39,
-  "tags": ["beam", "monitoring", "mlops"],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["beam", "monitoring"],
   "templating": { "list": [] },
-  "time": { "from": "now-24h", "to": "now" },
+  "time": { "from": "now-7d", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "BEAM — Model Monitoring Dashboard",
   "uid": "beam-monitoring",
-  "version": 1
+  "version": 1,
+  "weekStart": ""
 }

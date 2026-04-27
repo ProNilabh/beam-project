@@ -1,188 +1,160 @@
-# BEAM — Building Energy Assessment with ML
+# BEAM — Building Energy Assessment Model
 
-> Predicting Heating & Cooling Loads Before Construction Begins
+Reproducible MLOps pipeline for predicting heating and cooling loads of residential buildings, with end-to-end Docker deployment and live monitoring.
 
-**Course:** MLOps: An Introduction — HS Lucerne  
-**Student:** Nilabh Pandey | MSCITDS.2501  
-**Instructor:** Forooz Shahbazi Avarvand
+**Dataset:** UCI Energy Efficiency (Tsanas & Xifara, 2012) — 768 buildings, 8 features, 2 targets (Heating Load, Cooling Load).
 
 ---
 
-## Overview
+## Project Phases
 
-BEAM predicts a building's **heating load** and **cooling load** (kWh/m²) from 8 architectural design features — enabling energy-efficient decisions **before construction begins**.
+| Phase | Scope |
+|---|---|
+| **Part 1** | EDA, feature engineering, baseline modelling |
+| **Part 2** | Model comparison (7 regressors), MLflow tracking, FastAPI inference service |
+| **Part 3** | Dockerize the full pipeline, monitoring with Postgres + Adminer + Grafana, live drift detection |
 
-## Dataset
-
-| Property | Value |
-|----------|-------|
-| Name | UCI Energy Efficiency Dataset |
-| Source | [UCI ML Repository](https://archive.ics.uci.edu/dataset/242/energy+efficiency) |
-| Rows | 768, zero missing values |
-| Origin | Ecotect simulation — Tsanas & Xifara (2012) |
-
-**8 inputs:** Relative Compactness, Surface Area, Wall Area, Roof Area, Overall Height, Orientation, Glazing Area, Glazing Area Distribution  
-**2 outputs:** Heating Load (Y1), Cooling Load (Y2)
+This repository covers **Part 3** as the integrated final deliverable.
 
 ---
 
-## Project Structure
+## Architecture
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  beam-train │───▶│  best_model │───▶│  beam-api   │
+│  (Prefect)  │    │   .pkl      │    │  (FastAPI)  │
+└─────────────┘    └─────────────┘    └──────┬──────┘
+       │                                     │ POST /log_batch
+       ▼                                     │  (drift + metrics)
+ ┌─────────────┐                             ▼
+ │  beam-mlflow│                      ┌─────────────┐
+ │  (UI :5000) │                      │  postgres   │
+ └─────────────┘                      └──────┬──────┘
+                                             │
+                          ┌──────────────────┼──────────────┐
+                          ▼                  ▼              ▼
+                   ┌────────────┐    ┌────────────┐  ┌────────────┐
+                   │  adminer   │    │  grafana   │  │ beam-monitor│
+                   │  (:8080)   │    │  (:3000)   │  │  (Prefect)  │
+                   └────────────┘    └────────────┘  └────────────┘
+```
+
+**7 Docker services**, one `docker-compose up --build`.
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Docker Desktop running
+- ~4 GB free RAM
+- Python 3.11+ (only if running scripts outside Docker)
+
+### Run everything
+
+```bash
+git clone <this-repo>
+cd beam-project
+docker-compose up --build
+```
+
+First build takes 5–15 minutes (image download + dependency install). Subsequent runs are ~30 seconds.
+
+### Open the UIs
+
+| Service | URL | Credentials |
+|---|---|---|
+| FastAPI Swagger | http://localhost:8000/docs | — |
+| MLflow | http://localhost:5000 | — |
+| Adminer | http://localhost:8080 | System=`PostgreSQL`, Server=`postgres`, User=`beam_user`, Password=`beam_pass`, DB=`beam_monitoring` |
+| Grafana | http://localhost:3000 | `admin` / `beam` |
+
+In Grafana → **Dashboards → BEAM — Model Monitoring Dashboard**.
+
+---
+
+## Live Demo: Send a Batch and Watch Grafana Update
+
+After the stack is up and the initial monitoring run has populated 10 batches, run:
+
+```bash
+# No drift — model performs well
+python -m monitoring.simulate_batch --drift 0.0
+
+# Moderate drift — metrics start degrading
+python -m monitoring.simulate_batch --drift 0.2
+
+# Heavy drift — clear performance drop, drift_alert flips to true
+python -m monitoring.simulate_batch --drift 0.5
+```
+
+Each call POSTs a synthetic batch to `POST /log_batch`, which:
+1. Runs predictions through the deployed model.
+2. Computes regression metrics (R², RMSE, MAE, per-target R²).
+3. Measures data drift via the **Kolmogorov-Smirnov statistic** averaged across all 8 features.
+4. Raises `drift_alert=true` when `drift_score ≥ 0.20`.
+5. Persists everything to Postgres.
+
+Refresh Grafana → the new datapoint appears within seconds.
+
+---
+
+## Data Drift: How It Works
+
+For each incoming feature column, we run the two-sample KS test against the training distribution. The KS statistic is the maximum vertical distance between the two empirical CDFs — bounded in `[0, 1]`. A value near 0 means identical distributions; near 1 means completely separated. We average the statistic across the 8 features to get a single `drift_score`.
+
+**What it tells you:**
+- If `drift_score` rises while `R²` drops, the model's degradation is explained by input distribution shift — retraining with fresh data will likely recover performance.
+- If `R²` drops but `drift_score` is flat, the issue is concept drift (relationship between X and y changed) — retraining alone may not be enough.
+
+The simulated `drift_level` parameter is the *injected* noise scale; `drift_score` is the *measured* drift. They correlate strongly, which validates the detector.
+
+---
+
+## Repo Structure
 
 ```
 beam-project/
 ├── data/
-│   └── ENB2012_data.csv              # Dataset
+│   └── ENB2012_data.xlsx
 ├── src/
-│   ├── __init__.py
-│   ├── data_preprocessing.py          # Data loading + scaling
-│   ├── train.py                       # MLflow training (standalone)
-│   ├── prefect_train.py               # Prefect-orchestrated training pipeline
-│   └── app.py                         # FastAPI web service
+│   ├── app.py                  # FastAPI service (predict + log_batch)
+│   ├── prefect_train.py        # Training pipeline (Prefect flow)
+│   └── ...
 ├── monitoring/
-│   ├── __init__.py
-│   ├── monitor.py                     # Prefect monitoring pipeline
-│   └── init_db.sql                    # Postgres schema
+│   ├── monitor.py              # Initial monitoring sweep (10 batches)
+│   ├── simulate_batch.py       # Live demo: send one batch
+│   └── init_db.sql             # Postgres schema
 ├── grafana/
-│   ├── provisioning/
-│   │   ├── datasources/datasource.yml # Postgres connection
-│   │   └── dashboards/dashboard.yml   # Dashboard auto-provisioning
+│   ├── provisioning/           # Auto-loaded datasource + dashboard config
 │   └── dashboards/
-│       └── beam_monitoring.json       # Monitoring dashboard
-├── models/                            # Generated after training
-├── mlruns/                            # MLflow tracking data
-├── scripts/test_api.py                # API test script
-├── Dockerfile                         # Single image for all services
-├── docker-compose.yml                 # Full stack: train + API + monitoring
+│       └── beam_monitoring.json
+├── models/                     # Trained model artifacts (gitignored)
+├── mlruns/                     # MLflow runs (gitignored)
+├── Dockerfile
+├── docker-compose.yml
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## Quick Start — Full Pipeline with Docker
-
-### Prerequisites
-
-- Docker and Docker Compose installed
-- The dataset file `data/ENB2012_data.csv` in the data folder
-
-### One Command to Run Everything
+## Useful Commands
 
 ```bash
-docker-compose up --build
+docker-compose ps                          # service status
+docker-compose logs -f beam-api            # follow API logs
+docker-compose logs --tail=50 beam-train   # last 50 lines of training
+docker-compose down                        # stop everything
+docker-compose down -v                     # stop + wipe Postgres + Grafana data
+docker-compose up --build beam-api         # rebuild a single service
 ```
-
-This starts 7 services in order:
-1. **beam-train** — Trains all models with Prefect + MLflow (exits after completion)
-2. **beam-api** — FastAPI web service on port 8000
-3. **beam-mlflow** — MLflow UI on port 5000
-4. **postgres** — PostgreSQL database for monitoring data
-5. **adminer** — Database web UI on port 8080
-6. **beam-monitor** — Runs the Prefect monitoring pipeline (exits after completion)
-7. **grafana** — Monitoring dashboard on port 3000
-
-### Access Points
-
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| FastAPI (Swagger) | http://localhost:8000/docs | — |
-| MLflow UI | http://localhost:5000 | — |
-| Adminer | http://localhost:8080 | Server: `postgres`, User: `beam_user`, Pass: `beam_pass`, DB: `beam_monitoring` |
-| Grafana | http://localhost:3000 | User: `admin`, Pass: `beam` |
-
----
-
-## Running Locally (without Docker)
-
-### 1. Install dependencies
-
-```bash
-conda activate nlp_env
-pip install -r requirements.txt
-```
-
-### 2. Train with Prefect
-
-```bash
-python -m src.prefect_train
-```
-
-### 3. Start MLflow UI
-
-```bash
-mlflow ui --backend-store-uri file:///C:/Users/nilab/Documents/beam-project/mlruns
-```
-
-### 4. Start FastAPI
-
-```bash
-uvicorn src.app:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 5. Start Postgres + Adminer + Grafana via Docker, then run monitoring
-
-```bash
-docker-compose up postgres adminer grafana -d
-python -m monitoring.monitor
-```
-
----
-
-## Orchestration with Prefect
-
-Both the training and monitoring pipelines are orchestrated with **Prefect**:
-
-- **Training pipeline** (`src/prefect_train.py`): data loading → preprocessing → model training (7 models, 2 experiments) → best model selection → model saving
-- **Monitoring pipeline** (`monitoring/monitor.py`): model loading → batch generation (with simulated drift) → evaluation → metrics storage in Postgres
-
-Each step is a Prefect `@task`, and the full workflow is a Prefect `@flow`.
-
----
-
-## Monitoring Pipeline
-
-The monitoring pipeline simulates real-world model deployment:
-
-1. **Generates batches** of new data sampled from the original dataset
-2. **Adds increasing drift** (noise) to simulate distribution shift over time
-3. **Evaluates the model** on each batch
-4. **Stores metrics** (R², RMSE, MAE) and individual predictions in Postgres
-5. **Grafana dashboard** visualizes performance degradation
-
-Drift schedule: `[0, 0, 0, 0.05, 0.1, 0.1, 0.15, 0.2, 0.3, 0.5]`
-→ First 3 batches are clean, then drift gradually increases, showing how model performance degrades.
-
----
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Health check |
-| GET | `/model-info` | Model metadata |
-| POST | `/predict` | Single building prediction |
-| POST | `/predict/batch` | Batch predictions |
-| GET | `/docs` | Swagger UI |
-
----
-
-## Reproducibility
-
-The entire pipeline is reproducible via Docker:
-
-```bash
-git clone https://github.com/YOUR_USERNAME/beam-mlops.git
-cd beam-mlops
-# Place ENB2012_data.csv in data/ folder
-docker-compose up --build
-```
-
-This trains the model from scratch, deploys it, runs monitoring, and populates the dashboard — all from a single command.
 
 ---
 
 ## References
 
-- Tsanas, A. & Xifara, A. (2012). Accurate quantitative estimation of energy performance of residential buildings using statistical machine learning tools.
+- Tsanas, A. & Xifara, A. (2012). *Accurate quantitative estimation of energy performance of residential buildings using statistical machine learning tools.* Energy and Buildings.
 - Chip Huyen — *Designing Machine Learning Systems*
-- MLOps Zoomcamp
+- DataTalksClub — MLOps Zoomcamp

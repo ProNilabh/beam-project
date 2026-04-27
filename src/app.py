@@ -1,201 +1,209 @@
 """
-BEAM — FastAPI Web Service
-==========================
-Deploys the best BEAM model as a REST API.
+BEAM FastAPI service.
 
-Usage:
-    cd beam-project
-    uvicorn src.app:app --host 0.0.0.0 --port 8000 --reload
+Endpoints:
+    GET  /              health check
+    POST /predict       single-row prediction
+    POST /log_batch     receive a batch, predict, measure drift, persist to Postgres
+                        (this is the live-demo endpoint)
 """
 
 import os
-import json
-import numpy as np
+from datetime import datetime
+from typing import List
+
 import joblib
+import numpy as np
+import pandas as pd
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from scipy.stats import ks_2samp
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+from sqlalchemy import create_engine, text
 
-# ─── Load model + scaler ────────────────────────────────────────────────────
-
-MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
-
-model  = joblib.load(os.path.join(MODEL_DIR, "best_model.joblib"))
-scaler = joblib.load(os.path.join(MODEL_DIR, "scaler.joblib"))
-
-with open(os.path.join(MODEL_DIR, "metadata.json")) as f:
-    metadata = json.load(f)
-
-# ─── FastAPI app ─────────────────────────────────────────────────────────────
-
-app = FastAPI(
-    title="BEAM — Building Energy Assessment with ML",
-    description=(
-        "Predict heating and cooling energy loads (kWh/m²) "
-        "from 8 building design features."
-    ),
-    version="1.0.0",
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+MODEL_PATH = os.getenv("MODEL_PATH", "/app/models/best_model.pkl")
+DATA_PATH = os.getenv("DATA_PATH", "/app/data/ENB2012_data.xlsx")
+POSTGRES_URI = os.getenv(
+    "POSTGRES_URI",
+    "postgresql://beam_user:beam_pass@postgres:5432/beam_monitoring",
 )
+DRIFT_ALERT_THRESHOLD = 0.20  # mean KS statistic above this → flag drift
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+FEATURES = ["X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8"]
+TARGETS = ["Y1", "Y2"]
 
-# ─── Schemas ─────────────────────────────────────────────────────────────────
-
-class BuildingInput(BaseModel):
-    """The 8 architectural design inputs."""
-    Relative_Compactness: float = Field(
-        ..., ge=0.6, le=1.0,
-        description="Compactness ratio (0.62–0.98)",
-    )
-    Surface_Area: float = Field(
-        ..., ge=500, le=900,
-        description="Total surface area in m²",
-    )
-    Wall_Area: float = Field(
-        ..., ge=200, le=450,
-        description="Wall area in m²",
-    )
-    Roof_Area: float = Field(
-        ..., ge=100, le=250,
-        description="Roof area in m²",
-    )
-    Overall_Height: float = Field(
-        ..., ge=3, le=8,
-        description="Building height in metres (3.5 or 7.0)",
-    )
-    Orientation: float = Field(
-        ..., ge=1, le=5,
-        description="2=North, 3=East, 4=South, 5=West",
-    )
-    Glazing_Area: float = Field(
-        ..., ge=0, le=1,
-        description="Window-to-wall ratio (0, 0.1, 0.25, 0.4)",
-    )
-    Glazing_Area_Distribution: float = Field(
-        ..., ge=0, le=6,
-        description="0=none, 1–5=uniform to concentrated",
-    )
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "Relative_Compactness": 0.74,
-                    "Surface_Area": 686.0,
-                    "Wall_Area": 245.0,
-                    "Roof_Area": 220.5,
-                    "Overall_Height": 3.5,
-                    "Orientation": 3.0,
-                    "Glazing_Area": 0.1,
-                    "Glazing_Area_Distribution": 2.0,
-                }
-            ]
-        }
-    }
+# ---------------------------------------------------------------------------
+# App startup — load model and reference data once
+# ---------------------------------------------------------------------------
+app = FastAPI(title="BEAM — Building Energy Assessment Model", version="3.0")
+model = joblib.load(MODEL_PATH)
+reference_df = pd.read_excel(DATA_PATH).dropna()
+print(f"Loaded model from {MODEL_PATH}")
+print(f"Loaded reference data: {len(reference_df)} rows from {DATA_PATH}")
 
 
-class PredictionResponse(BaseModel):
-    Heating_Load_kWh_m2: float
-    Cooling_Load_kWh_m2: float
-    model_used: str
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+class BuildingFeatures(BaseModel):
+    X1: float
+    X2: float
+    X3: float
+    X4: float
+    X5: float
+    X6: float
+    X7: float
+    X8: float
 
 
-class BatchInput(BaseModel):
-    buildings: list[BuildingInput]
+class BatchRow(BaseModel):
+    X1: float
+    X2: float
+    X3: float
+    X4: float
+    X5: float
+    X6: float
+    X7: float
+    X8: float
+    Y1: float  # actual heating load
+    Y2: float  # actual cooling load
 
 
-class BatchResponse(BaseModel):
-    predictions: list[PredictionResponse]
-    count: int
+class BatchPayload(BaseModel):
+    drift_level: float = 0.0
+    rows: List[BatchRow]
 
 
-# ─── Endpoints ───────────────────────────────────────────────────────────────
-
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 @app.get("/")
-def health():
-    """Health-check / root."""
+def root():
     return {
-        "status": "healthy",
-        "model": metadata["model_name"],
-        "test_r2": metadata["test_r2"],
-        "version": "1.0.0",
+        "service": "BEAM",
+        "status": "ok",
+        "model_path": MODEL_PATH,
+        "reference_rows": len(reference_df),
     }
 
 
-@app.get("/model-info")
-def model_info():
-    """Return full model metadata."""
-    return metadata
+@app.post("/predict")
+def predict(features: BuildingFeatures):
+    """Single-building prediction."""
+    X = np.array([[getattr(features, f) for f in FEATURES]])
+    y = model.predict(X)[0]
+    return {"heating_load": float(y[0]), "cooling_load": float(y[1])}
 
 
-@app.post("/predict", response_model=PredictionResponse)
-def predict(building: BuildingInput):
-    """Predict heating & cooling loads for ONE building."""
-    try:
-        features = np.array([[
-            building.Relative_Compactness,
-            building.Surface_Area,
-            building.Wall_Area,
-            building.Roof_Area,
-            building.Overall_Height,
-            building.Orientation,
-            building.Glazing_Area,
-            building.Glazing_Area_Distribution,
-        ]])
+@app.post("/log_batch")
+def log_batch(payload: BatchPayload):
+    """
+    Live monitoring endpoint.
 
-        scaled = scaler.transform(features)
-        pred   = model.predict(scaled)
+    Accepts a batch of rows (features + actuals), runs predictions, measures
+    drift vs. the reference distribution, and writes everything to Postgres.
+    """
+    if len(payload.rows) == 0:
+        raise HTTPException(status_code=400, detail="Empty batch")
 
-        if pred.ndim == 1:
-            pred = pred.reshape(1, -1)
+    # ---- to dataframe ------------------------------------------------------
+    batch_df = pd.DataFrame([r.dict() for r in payload.rows])
+    X = batch_df[FEATURES].values
+    y_true = batch_df[TARGETS].values
 
-        return PredictionResponse(
-            Heating_Load_kWh_m2=round(float(pred[0][0]), 2),
-            Cooling_Load_kWh_m2=round(float(pred[0][1]), 2),
-            model_used=metadata["model_name"],
+    # ---- predict -----------------------------------------------------------
+    y_pred = model.predict(X)
+
+    r2 = float(r2_score(y_true, y_pred))
+    rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
+    mae = float(mean_absolute_error(y_true, y_pred))
+    heating_r2 = float(r2_score(y_true[:, 0], y_pred[:, 0]))
+    cooling_r2 = float(r2_score(y_true[:, 1], y_pred[:, 1]))
+
+    # ---- measure drift (mean KS statistic across features) -----------------
+    ks_stats = [
+        ks_2samp(reference_df[col].values, batch_df[col].values).statistic
+        for col in FEATURES
+    ]
+    drift_score = float(np.mean(ks_stats))
+    drift_alert = drift_score >= DRIFT_ALERT_THRESHOLD
+
+    # ---- persist to Postgres -----------------------------------------------
+    engine = create_engine(POSTGRES_URI)
+    timestamp = datetime.utcnow()
+
+    with engine.begin() as conn:
+        # next batch_id
+        result = conn.execute(text("SELECT COALESCE(MAX(batch_id), 0) + 1 FROM model_metrics"))
+        batch_id = int(result.scalar())
+
+        conn.execute(
+            text(
+                """
+                INSERT INTO model_metrics
+                (batch_id, timestamp, model_name, n_samples, r2, rmse, mae,
+                 heating_r2, cooling_r2, drift_level, drift_score)
+                VALUES
+                (:batch_id, :timestamp, :model_name, :n_samples, :r2, :rmse, :mae,
+                 :heating_r2, :cooling_r2, :drift_level, :drift_score)
+                """
+            ),
+            {
+                "batch_id": batch_id,
+                "timestamp": timestamp,
+                "model_name": "best_model",
+                "n_samples": len(batch_df),
+                "r2": r2,
+                "rmse": rmse,
+                "mae": mae,
+                "heating_r2": heating_r2,
+                "cooling_r2": cooling_r2,
+                "drift_level": float(payload.drift_level),
+                "drift_score": drift_score,
+            },
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.post("/predict/batch", response_model=BatchResponse)
-def predict_batch(batch: BatchInput):
-    """Predict for multiple buildings."""
-    try:
-        features = np.array([
-            [
-                b.Relative_Compactness, b.Surface_Area, b.Wall_Area,
-                b.Roof_Area, b.Overall_Height, b.Orientation,
-                b.Glazing_Area, b.Glazing_Area_Distribution,
-            ]
-            for b in batch.buildings
-        ])
-
-        scaled = scaler.transform(features)
-        preds  = model.predict(scaled)
-        if preds.ndim == 1:
-            preds = preds.reshape(-1, 2)
-
-        results = [
-            PredictionResponse(
-                Heating_Load_kWh_m2=round(float(p[0]), 2),
-                Cooling_Load_kWh_m2=round(float(p[1]), 2),
-                model_used=metadata["model_name"],
+        rows = []
+        for i in range(len(batch_df)):
+            rows.append(
+                {
+                    "batch_id": batch_id,
+                    "timestamp": timestamp,
+                    "actual_heating": float(y_true[i, 0]),
+                    "predicted_heating": float(y_pred[i, 0]),
+                    "heating_error": float(y_pred[i, 0] - y_true[i, 0]),
+                    "actual_cooling": float(y_true[i, 1]),
+                    "predicted_cooling": float(y_pred[i, 1]),
+                    "cooling_error": float(y_pred[i, 1] - y_true[i, 1]),
+                }
             )
-            for p in preds
-        ]
-        return BatchResponse(predictions=results, count=len(results))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        conn.execute(
+            text(
+                """
+                INSERT INTO prediction_log
+                (batch_id, timestamp, actual_heating, predicted_heating, heating_error,
+                 actual_cooling, predicted_cooling, cooling_error)
+                VALUES
+                (:batch_id, :timestamp, :actual_heating, :predicted_heating, :heating_error,
+                 :actual_cooling, :predicted_cooling, :cooling_error)
+                """
+            ),
+            rows,
+        )
 
-
-# ─── run directly ────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    return {
+        "batch_id": batch_id,
+        "n_samples": len(batch_df),
+        "r2": r2,
+        "rmse": rmse,
+        "mae": mae,
+        "heating_r2": heating_r2,
+        "cooling_r2": cooling_r2,
+        "drift_level": float(payload.drift_level),
+        "drift_score": drift_score,
+        "drift_alert": drift_alert,
+        "drift_threshold": DRIFT_ALERT_THRESHOLD,
+    }

@@ -8,22 +8,30 @@ services:
       PREFECT_SERVER_EPHEMERAL_STARTUP_TIMEOUT_SECONDS: "120"
       PREFECT_API_DATABASE_CONNECTION_URL: "sqlite+aiosqlite:///:memory:"
       PREFECT_LOGGING_LEVEL: "WARNING"
+      GIT_PYTHON_REFRESH: "quiet"
     volumes:
       - model-data:/app/models
       - mlflow-data:/app/mlruns
       - ./data:/app/data
+
   beam-api:
     build: .
     container_name: beam-api
     ports:
       - "8000:8000"
     command: uvicorn src.app:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      POSTGRES_URI: postgresql://beam_user:beam_pass@postgres:5432/beam_monitoring
     volumes:
       - model-data:/app/models
+      - ./data:/app/data
     depends_on:
       beam-train:
         condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
+
   beam-mlflow:
     build: .
     container_name: beam-mlflow
@@ -35,6 +43,7 @@ services:
     depends_on:
       beam-train:
         condition: service_completed_successfully
+
   postgres:
     image: postgres:15
     container_name: beam-postgres
@@ -52,6 +61,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
   adminer:
     image: adminer:latest
     container_name: beam-adminer
@@ -60,6 +70,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
   beam-monitor:
     build: .
     container_name: beam-monitor
@@ -78,6 +89,7 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
+
   grafana:
     image: grafana/grafana:latest
     container_name: beam-grafana
@@ -94,6 +106,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
 volumes:
   model-data:
   mlflow-data:
