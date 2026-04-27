@@ -1,14 +1,3 @@
-"""
-BEAM — Prefect Training Pipeline
-=================================
-Wraps the entire training workflow as Prefect tasks and flows.
-Orchestrates: data loading → preprocessing → training → evaluation → model saving.
-
-Usage:
-    cd beam-project
-    python -m src.prefect_train
-"""
-
 import os
 import sys
 import json
@@ -197,12 +186,12 @@ def get_all_models():
 # ── Prefect Flow ─────────────────────────────────────────────────────────────
 
 @flow(name="BEAM_Training_Pipeline", log_prints=True)
-def training_pipeline(data_path: str = None):
+def training_pipeline(data_path: str = ""):
     """
     Full BEAM training pipeline orchestrated by Prefect.
     Trains all models across 2 experiments, logs to MLflow, saves best model.
     """
-    if data_path is None:
+    if not data_path:
         data_path = os.path.join(os.path.dirname(__file__), "..", "data", "ENB2012_data.csv")
 
     # MLflow setup

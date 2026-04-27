@@ -1,16 +1,17 @@
-version: "3.8"
-
 services:
-
   beam-train:
     build: .
     container_name: beam-train
     command: python -m src.prefect_train
+    environment:
+      PREFECT_SERVER_ALLOW_EPHEMERAL_MODE: "true"
+      PREFECT_SERVER_EPHEMERAL_STARTUP_TIMEOUT_SECONDS: "120"
+      PREFECT_API_DATABASE_CONNECTION_URL: "sqlite+aiosqlite:///:memory:"
+      PREFECT_LOGGING_LEVEL: "WARNING"
     volumes:
       - model-data:/app/models
       - mlflow-data:/app/mlruns
       - ./data:/app/data
-
   beam-api:
     build: .
     container_name: beam-api
@@ -23,7 +24,6 @@ services:
       beam-train:
         condition: service_completed_successfully
     restart: unless-stopped
-
   beam-mlflow:
     build: .
     container_name: beam-mlflow
@@ -35,7 +35,6 @@ services:
     depends_on:
       beam-train:
         condition: service_completed_successfully
-
   postgres:
     image: postgres:15
     container_name: beam-postgres
@@ -53,7 +52,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
   adminer:
     image: adminer:latest
     container_name: beam-adminer
@@ -62,13 +60,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
   beam-monitor:
     build: .
     container_name: beam-monitor
     command: python -m monitoring.monitor
     environment:
       POSTGRES_URI: postgresql://beam_user:beam_pass@postgres:5432/beam_monitoring
+      PREFECT_SERVER_ALLOW_EPHEMERAL_MODE: "true"
+      PREFECT_SERVER_EPHEMERAL_STARTUP_TIMEOUT_SECONDS: "120"
+      PREFECT_API_DATABASE_CONNECTION_URL: "sqlite+aiosqlite:///:memory:"
+      PREFECT_LOGGING_LEVEL: "WARNING"
     volumes:
       - model-data:/app/models
       - ./data:/app/data
@@ -77,7 +78,6 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
-
   grafana:
     image: grafana/grafana:latest
     container_name: beam-grafana
@@ -94,7 +94,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
 volumes:
   model-data:
   mlflow-data:

@@ -292,4 +292,8 @@ def monitoring_pipeline(
 
 
 if __name__ == "__main__":
-    monitoring_pipeline()
+    monitoring_pipeline(
+        n_batches=10,
+        batch_size=50,
+        drift_schedule=[0, 0, 0, 0.05, 0.1, 0.1, 0.15, 0.2, 0.3, 0.5],
+    )
