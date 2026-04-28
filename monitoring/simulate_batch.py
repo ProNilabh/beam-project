@@ -1,24 +1,3 @@
-"""
-BEAM Live Batch Simulator
-
-Generates a synthetic batch (with optional drift) and POSTs it to the
-FastAPI /log_batch endpoint. The endpoint runs predictions, measures drift,
-and writes everything to Postgres → Grafana picks it up automatically.
-
-Usage:
-    # Default — batch of 50 rows, drift level 0.0
-    python -m monitoring.simulate_batch
-
-    # With drift
-    python -m monitoring.simulate_batch --drift 0.3
-
-    # Custom size and API URL
-    python -m monitoring.simulate_batch --size 100 --drift 0.5 --url http://localhost:8000
-
-This is the live-demo script for the presentation: run it during the talk
-and the new datapoint appears in Grafana within a few seconds.
-"""
-
 import argparse
 import os
 import sys
@@ -32,7 +11,6 @@ TARGETS = ["Y1", "Y2"]
 
 
 def make_batch(size: int, drift: float) -> pd.DataFrame:
-    """Sample from training data, optionally inject Gaussian drift."""
     df = pd.read_excel(DATA_PATH).dropna()
     sample = df.sample(n=size, replace=True).copy().reset_index(drop=True)
     if drift > 0:
