@@ -1,14 +1,3 @@
-"""
-BEAM Monitoring Pipeline
-
-Generates 10 batches of synthetic data with progressively increasing drift,
-runs them through the deployed model, and writes batch-level metrics +
-individual predictions to PostgreSQL. Grafana visualizes the result.
-
-Run inside Docker via docker-compose, or locally with:
-    python -m monitoring.monitor
-"""
-
 import os
 import joblib
 import numpy as np
@@ -19,9 +8,7 @@ from sqlalchemy import create_engine, text
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from scipy.stats import ks_2samp
 
-# ---------------------------------------------------------------------------
 # Config
-# ---------------------------------------------------------------------------
 POSTGRES_URI = os.getenv(
     "POSTGRES_URI",
     "postgresql://beam_user:beam_pass@localhost:5432/beam_monitoring",
@@ -32,10 +19,7 @@ DATA_PATH = os.getenv("DATA_PATH", "/app/data/ENB2012_data.xlsx")
 FEATURES = ["X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8"]
 TARGETS = ["Y1", "Y2"]  # Heating Load, Cooling Load
 
-
-# ---------------------------------------------------------------------------
 # Tasks
-# ---------------------------------------------------------------------------
 @task
 def load_artifacts():
     """Load trained model and reference (training) data."""
@@ -47,10 +31,6 @@ def load_artifacts():
 
 @task
 def generate_batch(reference_df: pd.DataFrame, batch_size: int, drift_level: float):
-    """
-    Generate a synthetic batch by sampling from the reference data and
-    optionally injecting Gaussian noise scaled by drift_level.
-    """
     sample = reference_df.sample(n=batch_size, replace=True).copy().reset_index(drop=True)
     if drift_level > 0:
         for col in FEATURES:
@@ -61,11 +41,6 @@ def generate_batch(reference_df: pd.DataFrame, batch_size: int, drift_level: flo
 
 @task
 def measure_drift(reference_df: pd.DataFrame, batch_df: pd.DataFrame) -> float:
-    """
-    Measure data drift between reference and batch using the Kolmogorov-Smirnov
-    test on each feature. Returns the mean KS statistic across features.
-    Higher = more drift. 0 = identical distributions.
-    """
     ks_stats = []
     for col in FEATURES:
         stat, _ = ks_2samp(reference_df[col].values, batch_df[col].values)
@@ -75,7 +50,6 @@ def measure_drift(reference_df: pd.DataFrame, batch_df: pd.DataFrame) -> float:
 
 @task
 def evaluate(model, batch_df: pd.DataFrame):
-    """Run inference on the batch and compute regression metrics."""
     X = batch_df[FEATURES]
     y_true = batch_df[TARGETS].values
     y_pred = model.predict(X)
@@ -99,7 +73,6 @@ def evaluate(model, batch_df: pd.DataFrame):
 
 @task
 def write_to_postgres(batch_id: int, metrics: dict, drift_level: float, drift_score: float):
-    """Insert batch-level metrics and per-row predictions into Postgres."""
     engine = create_engine(POSTGRES_URI)
     timestamp = datetime.utcnow()
 
@@ -159,17 +132,13 @@ def write_to_postgres(batch_id: int, metrics: dict, drift_level: float, drift_sc
             rows,
         )
 
-
-# ---------------------------------------------------------------------------
 # Flow
-# ---------------------------------------------------------------------------
 @flow(name="BEAM_Monitoring_Pipeline")
 def monitoring_pipeline(
     n_batches: int = 10,
     batch_size: int = 50,
     drift_schedule: list = None,
 ):
-    """Run a full monitoring sweep."""
     if drift_schedule is None:
         drift_schedule = [0, 0, 0, 0.05, 0.1, 0.1, 0.15, 0.2, 0.3, 0.5]
 
