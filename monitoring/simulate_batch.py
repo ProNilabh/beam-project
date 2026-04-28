@@ -9,7 +9,6 @@ DATA_PATH = os.getenv("DATA_PATH", "data/ENB2012_data.xlsx")
 FEATURES = ["X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8"]
 TARGETS = ["Y1", "Y2"]
 
-
 def make_batch(size: int, drift: float) -> pd.DataFrame:
     df = pd.read_excel(DATA_PATH).dropna()
     sample = df.sample(n=size, replace=True).copy().reset_index(drop=True)
