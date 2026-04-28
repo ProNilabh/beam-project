@@ -1,11 +1,3 @@
-"""
-BEAM Training Pipeline (Prefect orchestrated)
-
-Loads the UCI Energy Efficiency dataset, trains 7 regression models on the
-joint heating + cooling targets, logs each run to MLflow, and saves the best
-model (by validation R²) to disk for the FastAPI service to pick up.
-"""
-
 import os
 import joblib
 import numpy as np
@@ -23,9 +15,7 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.multioutput import MultiOutputRegressor
 from xgboost import XGBRegressor
 
-# ---------------------------------------------------------------------------
 # Config
-# ---------------------------------------------------------------------------
 DATA_PATH = os.getenv("DATA_PATH", "/app/data/ENB2012_data.xlsx")
 MODEL_DIR = os.getenv("MODEL_DIR", "/app/models")
 MLFLOW_DIR = os.getenv("MLFLOW_DIR", "/app/mlruns")
@@ -34,10 +24,7 @@ EXPERIMENT = "BEAM_Training"
 FEATURES = ["X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8"]
 TARGETS = ["Y1", "Y2"]
 
-
-# ---------------------------------------------------------------------------
 # Tasks
-# ---------------------------------------------------------------------------
 @task
 def load_data() -> pd.DataFrame:
     """Load and clean the Energy Efficiency dataset."""
@@ -45,7 +32,6 @@ def load_data() -> pd.DataFrame:
     df = df.dropna()
     print(f"Loaded {len(df)} rows from {DATA_PATH}")
     return df
-
 
 @task
 def split_data(df: pd.DataFrame):
@@ -57,10 +43,8 @@ def split_data(df: pd.DataFrame):
     )
     return X_train, X_val, y_train, y_val
 
-
 @task
 def get_models() -> dict:
-    """Return the model zoo. Multi-output wrappers where needed."""
     return {
         "LinearRegression": LinearRegression(),
         "Ridge": Ridge(alpha=1.0, random_state=42),
@@ -75,10 +59,8 @@ def get_models() -> dict:
         ),
     }
 
-
 @task
 def train_and_log(name, model, X_train, X_val, y_train, y_val):
-    """Train one model, evaluate, log to MLflow."""
     with mlflow.start_run(run_name=name):
         model.fit(X_train, y_train)
         y_pred = model.predict(X_val)
@@ -102,7 +84,6 @@ def train_and_log(name, model, X_train, X_val, y_train, y_val):
         print(f"  {name:20s}  R²={r2:.4f}  RMSE={rmse:.4f}")
         return {"name": name, "model": model, "r2": r2, "rmse": rmse}
 
-
 @task
 def save_best(results: list):
     """Pick the highest-R² model and persist it to /app/models/best_model.pkl."""
@@ -114,10 +95,7 @@ def save_best(results: list):
     print(f"Saved to {out}")
     return best
 
-
-# ---------------------------------------------------------------------------
 # Flow
-# ---------------------------------------------------------------------------
 @flow(name="BEAM_Training_Pipeline")
 def training_pipeline():
     mlflow.set_tracking_uri(f"file://{MLFLOW_DIR}")
