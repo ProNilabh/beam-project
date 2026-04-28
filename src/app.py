@@ -1,13 +1,3 @@
-"""
-BEAM FastAPI service.
-
-Endpoints:
-    GET  /              health check
-    POST /predict       single-row prediction
-    POST /log_batch     receive a batch, predict, measure drift, persist to Postgres
-                        (this is the live-demo endpoint)
-"""
-
 import os
 from datetime import datetime
 from typing import List
@@ -21,9 +11,7 @@ from scipy.stats import ks_2samp
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from sqlalchemy import create_engine, text
 
-# ---------------------------------------------------------------------------
 # Config
-# ---------------------------------------------------------------------------
 MODEL_PATH = os.getenv("MODEL_PATH", "/app/models/best_model.pkl")
 DATA_PATH = os.getenv("DATA_PATH", "/app/data/ENB2012_data.xlsx")
 POSTGRES_URI = os.getenv(
@@ -35,19 +23,14 @@ DRIFT_ALERT_THRESHOLD = 0.20  # mean KS statistic above this → flag drift
 FEATURES = ["X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8"]
 TARGETS = ["Y1", "Y2"]
 
-# ---------------------------------------------------------------------------
 # App startup — load model and reference data once
-# ---------------------------------------------------------------------------
 app = FastAPI(title="BEAM — Building Energy Assessment Model", version="3.0")
 model = joblib.load(MODEL_PATH)
 reference_df = pd.read_excel(DATA_PATH).dropna()
 print(f"Loaded model from {MODEL_PATH}")
 print(f"Loaded reference data: {len(reference_df)} rows from {DATA_PATH}")
 
-
-# ---------------------------------------------------------------------------
 # Schemas
-# ---------------------------------------------------------------------------
 class BuildingFeatures(BaseModel):
     X1: float
     X2: float
@@ -76,10 +59,7 @@ class BatchPayload(BaseModel):
     drift_level: float = 0.0
     rows: List[BatchRow]
 
-
-# ---------------------------------------------------------------------------
 # Endpoints
-# ---------------------------------------------------------------------------
 @app.get("/")
 def root():
     return {
@@ -92,7 +72,6 @@ def root():
 
 @app.post("/predict")
 def predict(features: BuildingFeatures):
-    """Single-building prediction."""
     X = np.array([[getattr(features, f) for f in FEATURES]])
     y = model.predict(X)[0]
     return {"heating_load": float(y[0]), "cooling_load": float(y[1])}
@@ -100,21 +79,13 @@ def predict(features: BuildingFeatures):
 
 @app.post("/log_batch")
 def log_batch(payload: BatchPayload):
-    """
-    Live monitoring endpoint.
-
-    Accepts a batch of rows (features + actuals), runs predictions, measures
-    drift vs. the reference distribution, and writes everything to Postgres.
-    """
     if len(payload.rows) == 0:
         raise HTTPException(status_code=400, detail="Empty batch")
 
-    # ---- to dataframe ------------------------------------------------------
     batch_df = pd.DataFrame([r.dict() for r in payload.rows])
     X = batch_df[FEATURES].values
     y_true = batch_df[TARGETS].values
 
-    # ---- predict -----------------------------------------------------------
     y_pred = model.predict(X)
 
     r2 = float(r2_score(y_true, y_pred))
@@ -123,7 +94,6 @@ def log_batch(payload: BatchPayload):
     heating_r2 = float(r2_score(y_true[:, 0], y_pred[:, 0]))
     cooling_r2 = float(r2_score(y_true[:, 1], y_pred[:, 1]))
 
-    # ---- measure drift (mean KS statistic across features) -----------------
     ks_stats = [
         ks_2samp(reference_df[col].values, batch_df[col].values).statistic
         for col in FEATURES
@@ -131,12 +101,10 @@ def log_batch(payload: BatchPayload):
     drift_score = float(np.mean(ks_stats))
     drift_alert = drift_score >= DRIFT_ALERT_THRESHOLD
 
-    # ---- persist to Postgres -----------------------------------------------
     engine = create_engine(POSTGRES_URI)
     timestamp = datetime.utcnow()
 
     with engine.begin() as conn:
-        # next batch_id
         result = conn.execute(text("SELECT COALESCE(MAX(batch_id), 0) + 1 FROM model_metrics"))
         batch_id = int(result.scalar())
 
