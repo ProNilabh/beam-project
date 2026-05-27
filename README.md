@@ -1,6 +1,6 @@
 # BEAM — Building Energy Assessment Model
 
-Reproducible MLOps pipeline for predicting heating and cooling loads of residential buildings, with end-to-end Docker deployment and live monitoring.
+Reproducible MLOps pipeline for predicting heating and cooling loads of residential buildings. End-to-end Docker deployment, live drift monitoring, and GitHub Actions CI/CD.
 
 **Dataset:** UCI Energy Efficiency (Tsanas & Xifara, 2012) — 768 buildings, 8 features, 2 targets (Heating Load, Cooling Load).
 
@@ -13,8 +13,9 @@ Reproducible MLOps pipeline for predicting heating and cooling loads of resident
 | **Part 1** | EDA, feature engineering, baseline modelling |
 | **Part 2** | Model comparison (7 regressors), MLflow tracking, FastAPI inference service |
 | **Part 3** | Dockerize the full pipeline, monitoring with Postgres + Adminer + Grafana, live drift detection |
+| **Part 4** | CI/CD pipeline with GitHub Actions — automated testing, schema integrity checks, and Docker build verification |
 
-This repository covers **Part 3** as the integrated final deliverable.
+This repository delivers all four parts as one integrated stack.
 
 ---
 
@@ -41,6 +42,8 @@ This repository covers **Part 3** as the integrated final deliverable.
 ```
 
 **7 Docker services**, one `docker-compose up --build`.
+
+See `BEAM_MLOps_Pipeline_Flowchart.png` for the full visual flow.
 
 ---
 
@@ -71,6 +74,8 @@ First build takes 5–15 minutes (image download + dependency install). Subseque
 | Grafana | http://localhost:3000 | `admin` / `beam` |
 
 In Grafana → **Dashboards → BEAM — Model Monitoring Dashboard**.
+
+For a step-by-step walkthrough including troubleshooting, see `RUN_GUIDE.md`.
 
 ---
 
@@ -112,30 +117,91 @@ The simulated `drift_level` parameter is the *injected* noise scale; `drift_scor
 
 ---
 
+## CI/CD Pipeline (Part 4)
+
+A GitHub Actions workflow runs automatically on every push to `main` or `develop`, and on every pull request to `main`.
+
+### Three jobs run in parallel
+
+| Job | What it does | Catches |
+|---|---|---|
+| **test** | Lints code with `ruff`, runs unit tests on drift detection, batch generation, and cross-module consistency | Silent bugs from refactors that touch one module but not its peers |
+| **schema** | Spins up a real Postgres 15 service container, applies `init_db.sql`, runs the exact INSERT statements the application code uses | Schema drift between `init_db.sql` and `monitor.py` / `app.py` |
+| **docker** | Builds the Docker image and runs an import smoke test inside the container | Dependency conflicts, broken imports, build failures |
+
+### What's actually tested
+
+The tests deliberately target **integration boundaries** — the places bugs hide in a multi-service ML system:
+
+- **`FEATURES` list consistency** across all four Python modules (`app.py`, `prefect_train.py`, `monitor.py`, `simulate_batch.py`). If they drift, predictions silently become garbage. Parsed via AST so tests don't require heavy ML libraries.
+- **`docker-compose.yml` volume paths** all point to real files (catches renamed dashboards, deleted SQL).
+- **Postgres schema** matches the code's INSERT statements column-for-column.
+- **KS drift detector** behaves correctly: zero drift → low score, heavy drift → high score, monotonically increasing, bounded in [0, 1], no crashes on edge cases (constant features, single-row batches).
+- **Batch generation** produces correct size, all required columns, preserves distribution shape with zero drift, widens it with high drift, and produces a payload that matches the FastAPI Pydantic contract.
+
+### Run the tests locally
+
+```bash
+pip install pytest pyyaml ruff
+pytest tests/ -v
+```
+
+You'll see 27 passing tests; the 3 schema tests skip locally (they need a live Postgres) and run only in CI where the service container provides one.
+
+### Why this design
+
+Most CI/CD demos test trivial things — a single `assert 2 + 2 == 4`. This pipeline tests the actual failure modes of a multi-service ML system:
+
+> *"I went line-by-line through my three pipelines — training, monitoring, and inference — and identified where they break silently. The FEATURES list is duplicated across four files, so I test it's consistent. The Postgres schema is referenced by both the code and the Grafana dashboard, so I spin up a real Postgres in CI and verify the INSERT statements match the schema. The Docker build job confirms the image still builds and all modules import, which catches dependency conflicts. The tests target integration boundaries — that's where bugs actually live."*
+
+### Demonstrating the pipeline catches bugs
+
+To prove the CI works rather than just runs, follow the **red → green** demo in `RUN_GUIDE.md` (Part 3, Step 3). Push a deliberately broken commit (e.g., remove `X8` from the `FEATURES` list in one file), watch CI turn red, fix it, push again, watch CI turn green.
+
+---
+
 ## Repo Structure
 
 ```
 beam-project/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                        # CI/CD pipeline (Part 4)
 ├── data/
-│   └── ENB2012_data.xlsx
-├── src/
-│   ├── app.py                  # FastAPI service (predict + log_batch)
-│   ├── prefect_train.py        # Training pipeline (Prefect flow)
-│   └── ...
-├── monitoring/
-│   ├── monitor.py              # Initial monitoring sweep (10 batches)
-│   ├── simulate_batch.py       # Live demo: send one batch
-│   └── init_db.sql             # Postgres schema
+│   ├── ENB2012_data.xlsx                 # UCI dataset
+│   ├── ENB2012_data.csv
+│   └── README.txt
 ├── grafana/
-│   ├── provisioning/           # Auto-loaded datasource + dashboard config
-│   └── dashboards/
-│       └── beam_monitoring.json
-├── models/                     # Trained model artifacts (gitignored)
-├── mlruns/                     # MLflow runs (gitignored)
+│   ├── dashboards/
+│   │   └── beam_monitoring.json          # Auto-loaded 7-panel dashboard
+│   └── provisioning/
+│       ├── dashboards/dashboard.yml
+│       └── datasources/datasource.yml
+├── monitoring/
+│   ├── __init__.py
+│   ├── init_db.sql                       # Postgres schema
+│   ├── monitor.py                        # Initial monitoring sweep (Prefect)
+│   └── simulate_batch.py                 # Live demo script
+├── src/
+│   ├── __init__.py
+│   ├── app.py                            # FastAPI inference + /log_batch
+│   └── prefect_train.py                  # Training pipeline (Prefect)
+├── tests/
+│   ├── __init__.py
+│   ├── test_consistency.py               # Cross-module + file existence checks
+│   ├── test_drift.py                     # KS statistic behaviour
+│   ├── test_batch.py                     # Batch generation + payload shape
+│   └── test_schema.py                    # Postgres schema integrity (CI-only)
+├── models/                               # Trained model artifacts (gitignored)
+├── mlruns/                               # MLflow runs (gitignored)
+├── .dockerignore
+├── .gitignore
+├── BEAM_MLOps_Pipeline_Flowchart.png     # Architecture diagram
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
-└── README.md
+├── README.md
+└── RUN_GUIDE.md                          # Step-by-step setup walkthrough
 ```
 
 ---
@@ -149,6 +215,8 @@ docker-compose logs --tail=50 beam-train   # last 50 lines of training
 docker-compose down                        # stop everything
 docker-compose down -v                     # stop + wipe Postgres + Grafana data
 docker-compose up --build beam-api         # rebuild a single service
+
+pytest tests/ -v                           # run the test suite locally
 ```
 
 ---
