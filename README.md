@@ -1,8 +1,13 @@
 # BEAM — Building Energy Assessment Model
 
+[![CI](https://github.com/ProNilabh/beam-project/actions/workflows/ci.yml/badge.svg)](https://github.com/ProNilabh/beam-project/actions/workflows/ci.yml)
+[![CD](https://github.com/ProNilabh/beam-project/actions/workflows/cd.yml/badge.svg)](https://github.com/ProNilabh/beam-project/actions/workflows/cd.yml)
+
 Reproducible MLOps pipeline for predicting heating and cooling loads of residential buildings. End-to-end Docker deployment, live drift monitoring, and GitHub Actions CI/CD with Docker image publishing.
 
 **Dataset:** UCI Energy Efficiency (Tsanas & Xifara, 2012) — 768 buildings, 8 features, 2 targets (Heating Load, Cooling Load).
+
+**Published Docker image:** [ghcr.io/pronilabh/beam-project](https://github.com/ProNilabh/beam-project/pkgs/container/beam-project)
 
 ---
 
@@ -16,6 +21,17 @@ Reproducible MLOps pipeline for predicting heating and cooling loads of resident
 | **Part 4** | CI/CD pipeline with GitHub Actions — automated testing, schema integrity, Docker build, and image publishing to ghcr.io |
 
 This repository delivers all four parts as one integrated stack.
+
+---
+
+## What I Learned
+
+- **Schema drift is the most insidious bug class in a multi-service ML system.** When `init_db.sql` and the application code disagree about a column, nothing crashes at build time — it only fails at the first INSERT in production. Spinning up a real Postgres in CI to verify INSERT statements is the cheapest way to catch this.
+- **The model is the smallest part of an MLOps project.** Of seven Docker services, only one (`beam-train`) actually does machine learning. The other six are infrastructure — that ratio matched what production ML systems look like.
+- **Drift detection only works if the reference distribution is unseen by the model.** Sampling monitoring batches from the training set produced unrealistically high R² scores. Splitting the dataset before training and reserving the holdout for monitoring made the drift signal honest.
+- **KS thresholds must be tuned empirically.** The textbook 95% confidence threshold (~0.22 at our sample sizes) matched what our clean batches actually scored. A hand-picked number without that grounding would have been arbitrary.
+- **CI tests should target integration boundaries, not unit logic.** The bugs that hide in a multi-module project are at the seams — the `FEATURES` list duplicated across four files, the SQL schema referenced by both code and dashboards. Testing those boundaries caught more real failures than any single-module test would have.
+- **Ephemeral Prefect mode is a legitimate production pattern, not a workaround.** Running orchestration inside the container for one-shot flows avoids the operational cost of a persistent server while keeping the upgrade path open.
 
 ---
 
@@ -72,6 +88,18 @@ Instead of building locally, you can pull the published image from GitHub Contai
 docker pull ghcr.io/pronilabh/beam-project:latest
 ```
 
+### One-command live demo
+
+After the stack is up, run a full demo (5 batches at varying drift levels):
+
+```bash
+# Windows
+demo.bat
+
+# Linux / Mac
+./demo.sh
+```
+
 ### Open the UIs
 
 | Service | URL | Credentials |
@@ -122,7 +150,7 @@ The simulated `drift_level` parameter is the *injected* noise scale; `drift_scor
 
 ## CI/CD Pipeline (Part 4)
 
-Two GitHub Actions workflows run automatically — CI on every push and pull request, CD on every push to `main`.
+Two GitHub Actions workflows run automatically — CI on every push and pull request, CD on every push to `main` and on version tags.
 
 ### CI: Quality Gates (`.github/workflows/ci.yml`)
 
@@ -138,10 +166,10 @@ Three jobs run in parallel on every push and PR:
 
 After CI passes on `main`, the CD workflow:
 1. Builds the Docker image using the same build pipeline as CI
-2. Tags it three ways: `latest`, the short commit SHA, and the branch name
+2. Tags it with `latest`, the short commit SHA, the branch name, and (on tagged pushes) the semantic version
 3. Pushes it to GitHub Container Registry (`ghcr.io/pronilabh/beam-project`)
 
-Every commit on `main` produces a pullable, reproducible image — anyone can `docker pull` any version by tag or commit SHA.
+Every commit on `main` produces a pullable, reproducible image — anyone can `docker pull` any version by tag or commit SHA. Tagged releases (`v1.0.0`, etc.) get additional semantic-version tags for cleaner version pinning.
 
 ### What's actually tested
 
@@ -214,6 +242,8 @@ beam-project/
 ├── .gitignore
 ├── BEAM_MLOps_Pipeline_Flowchart.png     # Architecture diagram
 ├── Dockerfile
+├── demo.bat                              # Windows: one-command demo
+├── demo.sh                               # Linux/Mac: one-command demo
 ├── docker-compose.yml
 ├── requirements.txt
 ├── README.md
@@ -234,6 +264,8 @@ docker-compose up --build beam-api         # rebuild a single service
 
 pytest tests/ -v                           # run the test suite locally
 docker pull ghcr.io/pronilabh/beam-project:latest   # pull the latest published image
+
+git tag v1.0.0 && git push --tags          # publish a versioned release
 ```
 
 ---
