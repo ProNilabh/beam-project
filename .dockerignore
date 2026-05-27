@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.github/
+.gitignore
+.venv/
+venv/
+nlp_env/
+tests/
+.pytest_cache/
+.ruff_cache/
+mlruns/
+models/
+*.md
+*.png
+.DS_Store
