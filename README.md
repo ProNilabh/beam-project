@@ -1,6 +1,6 @@
 # BEAM — Building Energy Assessment Model
 
-Reproducible MLOps pipeline for predicting heating and cooling loads of residential buildings. End-to-end Docker deployment, live drift monitoring, and GitHub Actions CI/CD.
+Reproducible MLOps pipeline for predicting heating and cooling loads of residential buildings. End-to-end Docker deployment, live drift monitoring, and GitHub Actions CI/CD with Docker image publishing.
 
 **Dataset:** UCI Energy Efficiency (Tsanas & Xifara, 2012) — 768 buildings, 8 features, 2 targets (Heating Load, Cooling Load).
 
@@ -13,7 +13,7 @@ Reproducible MLOps pipeline for predicting heating and cooling loads of resident
 | **Part 1** | EDA, feature engineering, baseline modelling |
 | **Part 2** | Model comparison (7 regressors), MLflow tracking, FastAPI inference service |
 | **Part 3** | Dockerize the full pipeline, monitoring with Postgres + Adminer + Grafana, live drift detection |
-| **Part 4** | CI/CD pipeline with GitHub Actions — automated testing, schema integrity checks, and Docker build verification |
+| **Part 4** | CI/CD pipeline with GitHub Actions — automated testing, schema integrity, Docker build, and image publishing to ghcr.io |
 
 This repository delivers all four parts as one integrated stack.
 
@@ -57,12 +57,20 @@ See `BEAM_MLOps_Pipeline_Flowchart.png` for the full visual flow.
 ### Run everything
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/ProNilabh/beam-project.git
 cd beam-project
 docker-compose up --build
 ```
 
 First build takes 5–15 minutes (image download + dependency install). Subsequent runs are ~30 seconds.
+
+### Or pull the pre-built image
+
+Instead of building locally, you can pull the published image from GitHub Container Registry — automatically published by the CD pipeline on every push to `main`:
+
+```bash
+docker pull ghcr.io/pronilabh/beam-project:latest
+```
 
 ### Open the UIs
 
@@ -84,13 +92,8 @@ For a step-by-step walkthrough including troubleshooting, see `RUN_GUIDE.md`.
 After the stack is up and the initial monitoring run has populated 10 batches, run:
 
 ```bash
-# No drift — model performs well
 python -m monitoring.simulate_batch --drift 0.0
-
-# Moderate drift — metrics start degrading
 python -m monitoring.simulate_batch --drift 0.2
-
-# Heavy drift — clear performance drop, drift_alert flips to true
 python -m monitoring.simulate_batch --drift 0.5
 ```
 
@@ -119,15 +122,26 @@ The simulated `drift_level` parameter is the *injected* noise scale; `drift_scor
 
 ## CI/CD Pipeline (Part 4)
 
-A GitHub Actions workflow runs automatically on every push to `main` or `develop`, and on every pull request to `main`.
+Two GitHub Actions workflows run automatically — CI on every push and pull request, CD on every push to `main`.
 
-### Three jobs run in parallel
+### CI: Quality Gates (`.github/workflows/ci.yml`)
+
+Three jobs run in parallel on every push and PR:
 
 | Job | What it does | Catches |
 |---|---|---|
 | **test** | Lints code with `ruff`, runs unit tests on drift detection, batch generation, and cross-module consistency | Silent bugs from refactors that touch one module but not its peers |
 | **schema** | Spins up a real Postgres 15 service container, applies `init_db.sql`, runs the exact INSERT statements the application code uses | Schema drift between `init_db.sql` and `monitor.py` / `app.py` |
 | **docker** | Builds the Docker image and runs an import smoke test inside the container | Dependency conflicts, broken imports, build failures |
+
+### CD: Image Publishing (`.github/workflows/cd.yml`)
+
+After CI passes on `main`, the CD workflow:
+1. Builds the Docker image using the same build pipeline as CI
+2. Tags it three ways: `latest`, the short commit SHA, and the branch name
+3. Pushes it to GitHub Container Registry (`ghcr.io/pronilabh/beam-project`)
+
+Every commit on `main` produces a pullable, reproducible image — anyone can `docker pull` any version by tag or commit SHA.
 
 ### What's actually tested
 
@@ -138,6 +152,7 @@ The tests deliberately target **integration boundaries** — the places bugs hid
 - **Postgres schema** matches the code's INSERT statements column-for-column.
 - **KS drift detector** behaves correctly: zero drift → low score, heavy drift → high score, monotonically increasing, bounded in [0, 1], no crashes on edge cases (constant features, single-row batches).
 - **Batch generation** produces correct size, all required columns, preserves distribution shape with zero drift, widens it with high drift, and produces a payload that matches the FastAPI Pydantic contract.
+- **Docker image smoke test** verifies the built image can locate all four core modules — catches missing files, import errors, and dependency conflicts before the image ever runs in production.
 
 ### Run the tests locally
 
@@ -152,11 +167,11 @@ You'll see 27 passing tests; the 3 schema tests skip locally (they need a live P
 
 Most CI/CD demos test trivial things — a single `assert 2 + 2 == 4`. This pipeline tests the actual failure modes of a multi-service ML system:
 
-> *"I went line-by-line through my three pipelines — training, monitoring, and inference — and identified where they break silently. The FEATURES list is duplicated across four files, so I test it's consistent. The Postgres schema is referenced by both the code and the Grafana dashboard, so I spin up a real Postgres in CI and verify the INSERT statements match the schema. The Docker build job confirms the image still builds and all modules import, which catches dependency conflicts. The tests target integration boundaries — that's where bugs actually live."*
+> *"I went line-by-line through my three pipelines — training, monitoring, and inference — and identified where they break silently. The FEATURES list is duplicated across four files, so I test it's consistent. The Postgres schema is referenced by both the code and the Grafana dashboard, so I spin up a real Postgres in CI and verify the INSERT statements match the schema. The Docker build job confirms the image still builds and all modules import. CD then publishes the verified image to ghcr.io — every commit on main is automatically tested, built, and made pullable by SHA. The tests target integration boundaries — that's where bugs actually live."*
 
 ### Demonstrating the pipeline catches bugs
 
-To prove the CI works rather than just runs, follow the **red → green** demo in `RUN_GUIDE.md` (Part 3, Step 3). Push a deliberately broken commit (e.g., remove `X8` from the `FEATURES` list in one file), watch CI turn red, fix it, push again, watch CI turn green.
+To prove the CI works rather than just runs, follow the **red → green** demo in `RUN_GUIDE.md`. Push a deliberately broken commit (e.g., remove `X8` from the `FEATURES` list in one file), watch CI turn red, fix it, push again, watch CI turn green and CD publish the corrected image.
 
 ---
 
@@ -166,7 +181,8 @@ To prove the CI works rather than just runs, follow the **red → green** demo i
 beam-project/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                        # CI/CD pipeline (Part 4)
+│       ├── ci.yml                        # CI: lint, test, schema, Docker build
+│       └── cd.yml                        # CD: publish image to ghcr.io
 ├── data/
 │   ├── ENB2012_data.xlsx                 # UCI dataset
 │   ├── ENB2012_data.csv
@@ -217,6 +233,7 @@ docker-compose down -v                     # stop + wipe Postgres + Grafana data
 docker-compose up --build beam-api         # rebuild a single service
 
 pytest tests/ -v                           # run the test suite locally
+docker pull ghcr.io/pronilabh/beam-project:latest   # pull the latest published image
 ```
 
 ---
