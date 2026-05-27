@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-DATA_PATH = os.getenv("DATA_PATH", "data/ENB2012_data.xlsx")
+DATA_PATH = os.getenv("DATA_PATH", "data/ENB2012_holdout.xlsx")
 FEATURES = ["X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8"]
 TARGETS = ["Y1", "Y2"]
 
