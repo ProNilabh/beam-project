@@ -64,8 +64,6 @@ Then open:
 | Adminer | http://localhost:8080 | Server `postgres`, user `beam_user`, pass `beam_pass`, db `beam_monitoring` |
 | Grafana | http://localhost:3000 | `admin` / `beam` |
 
-Full step-by-step setup in `RUN_GUIDE.md`.
-
 ---
 
 ## Live Demo: Send a Batch and Watch Grafana Update
@@ -74,13 +72,13 @@ Full step-by-step setup in `RUN_GUIDE.md`.
 python -m monitoring.simulate_batch --drift 0.5
 ```
 
-Each call POSTs a synthetic batch to `/log_batch`, which runs predictions, computes metrics, measures drift via KS test, and persists to Postgres. Refresh Grafana — the new datapoint appears within seconds.
+Each call POSTs a synthetic batch to `/log_batch`, which runs predictions, computes metrics, measures drift via KS test, and persists to Postgres. Refresh Grafana, the new datapoint appears within seconds.
 
 ---
 
 ## Data Drift: How It Works
 
-For each incoming feature, we run a two-sample Kolmogorov-Smirnov test against the training distribution. The KS statistic measures the maximum vertical distance between the two empirical CDFs — bounded in `[0, 1]`. We average across the 8 features for a single `drift_score`, and trigger `drift_alert` when it crosses `0.20`.
+For each incoming feature, we run a two-sample Kolmogorov-Smirnov test against the training distribution. The KS statistic measures the maximum vertical distance between the two empirical CDFs, bounded in `[0, 1]`. We average across the 8 features for a single `drift_score`, and trigger `drift_alert` when it crosses `0.20`.
 
 The injected `drift_level` is what we simulated; `drift_score` is what the detector measured. Their correlation across batches is what validates the system works.
 
@@ -110,8 +108,7 @@ beam-project/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
-├── README.md
-└── RUN_GUIDE.md              # Step-by-step setup walkthrough
+└── README.md 
 ```
 
 ---
@@ -141,4 +138,4 @@ docker pull ghcr.io/pronilabh/beam-project:latest
 
 ## Acknowledgements
 
-A big thank you to **Prof. Forooz Shahbazi** for the guidance, feedback, and well-structured course that made this project possible. The depth of the MLOps requirements — from reproducibility through monitoring to CI/CD — pushed me to engage with production patterns I would not have explored on my own.
+A big thank you to **Prof. Forooz Shahbazi** for the guidance, feedback, and well-structured course that made this project possible. The depth of the MLOps requirements, from reproducibility through monitoring to CI/CD, pushed me to engage with production patterns I would not have explored on my own.
